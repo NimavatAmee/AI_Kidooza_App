@@ -1,0 +1,131 @@
+// Kidooza Prisma Database Schema
+// Complies with Section 8 of MVP Development Document & DPDP Act 2023
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Parent Accounts
+model Parent {
+  id                   String            @id @default(uuid())
+  email                String            @unique
+  authProviderId       String?           @map("auth_provider_id")
+  sessionLimitMinutes  Int               @default(20) @map("session_limit_minutes")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  children             Child[]
+  consents             ParentalConsent[]
+  usageEvents          UsageEvent[]
+
+  @@map("parents")
+}
+
+// 2. Child Profiles (Minimal Personal Data)
+model Child {
+  id                 String            @id @default(uuid())
+  parentId           String            @map("parent_id")
+  displayName        String            @map("display_name")
+  ageBand            String            @map("age_band") // e.g. "3-4", "4-5"
+  preferredLanguage  String            @default("en") @map("preferred_language") // "en", "hi", "gu"
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  parent             Parent            @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  sessions           Session[]
+  consents           ParentalConsent[]
+  usageEvents        UsageEvent[]
+  safetyEvents       SafetyEvent[]
+
+  @@map("children")
+}
+
+// 3. Verifiable Parental Consents (Section 9 DPDP Act)
+model ParentalConsent {
+  id              String    @id @default(uuid())
+  parentId        String    @map("parent_id")
+  childId         String?   @map("child_id")
+  consentVersion  String    @default("v1.0") @map("consent_version")
+  consentedAt     DateTime  @default(now()) @map("consented_at")
+  revokedAt       DateTime? @map("revoked_at")
+
+  parent          Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child           Child?    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("parental_consents")
+}
+
+// 4. Companion Characters (Dino, Robo, Bunny)
+model Character {
+  id               String    @id @default(uuid())
+  name             String    @unique // "Dino", "Robo", "Bunny"
+  personality      String
+  topics           String
+  modelAssetPath   String    @map("model_asset_path")
+  animationConfig  Json?     @map("animation_config")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  sessions         Session[]
+
+  @@map("characters")
+}
+
+// 5. Interactive Sessions (No Raw Voice Audio Stored)
+model Session {
+  id               String    @id @default(uuid())
+  childId          String    @map("child_id")
+  characterId      String    @map("character_id")
+  language         String    @default("en")
+  startedAt        DateTime  @default(now()) @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  durationSeconds  Int       @default(0) @map("duration_seconds")
+
+  child            Child     @relation(fields: [childId], references: [id], onDelete: Cascade)
+  character        Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// 6. Minimal Usage Events
+model UsageEvent {
+  id         String   @id @default(uuid())
+  parentId   String   @map("parent_id")
+  childId    String?  @map("child_id")
+  eventType  String   @map("event_type") // e.g. "SESSION_START", "LANGUAGE_CHANGE", "RHYME_CLICK"
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  parent     Parent   @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  child      Child?   @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("usage_events")
+}
+
+// 7. Child Safety Events
+model SafetyEvent {
+  id         String   @id @default(uuid())
+  childId    String   @map("child_id")
+  eventType  String   @map("event_type") // e.g. "PROFANITY_BLOCKED", "PII_PREVENTED", "FALLBACK_TRIGGERED"
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  child      Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("safety_events")
+}
+
+// 8. AI / STT / TTS API Cost & Usage
+model ApiUsage {
+  id             String   @id @default(uuid())
+  serviceName    String   @map("service_name") // "STT", "TTS", "LLM"
+  usageUnits     Int      @map("usage_units")  // e.g. tokens, audio seconds
+  estimatedCost  Float    @default(0.0) @map("estimated_cost")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("api_usage")
+}
