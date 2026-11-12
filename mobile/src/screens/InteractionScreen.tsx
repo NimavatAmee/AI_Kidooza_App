@@ -1,52 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { CharacterState, CHARACTERS } from '../types/character';
 import { CharacterViewer } from '../components/CharacterViewer';
-
-interface SampleDialogue {
-  en: string;
-  hi: string;
-  gu: string;
-}
-
-const DIALOGUES: Record<string, SampleDialogue> = {
-  welcome: {
-    en: "Hi there! I'm so happy to talk with you! What do you want to explore today?",
-    hi: "नमस्ते! मैं तुमसे बात करके बहुत खुश हूँ! आज हम क्या खेलेंगे?",
-    gu: "નમસ્તે! તમારી સાથે વાત કરીને મને ખૂબ આનંદ થયો! આજે આપણે શું રમીશું?",
-  },
-  listening: {
-    en: "I'm listening carefully... Tell me anything!",
-    hi: "मैं ध्यान से सुन रहा हूँ... बताओ!",
-    gu: "હું ધ્યાનથી સાંભળી રહ્યો છું... કહો!",
-  },
-  thinking: {
-    en: "Hmm... let me find a super fun answer!",
-    hi: "सोच रहा हूँ... एक मज़ेदार जवाब!",
-    gu: "હું વિચારું છું... એક સરસ જવાબ!",
-  },
-  rhyme: {
-    en: "Twinkle twinkle little star, how I wonder what you are!",
-    hi: "तितली उड़ी बस पर चढ़ी, सीट ना मिली तो रोने लगी!",
-    gu: "ચકીબેન ચકીબેન મારી સાથે રમવા આવશો કે નહીં?",
-  },
-  counting: {
-    en: "Let's count together: 1... 2... 3... 4... 5! High five!",
-    hi: "चलो साथ में गिनते हैं: एक, दो, तीन, चार, पाँच!",
-    gu: "ચાલો સાથે ગણીએ: એક, બે, ત્રણ, ચાર, પાંચ! શાબાશ!",
-  },
-  animal: {
-    en: "Roar! Lions say roar, and birds go tweet-tweet!",
-    hi: "शेर दहाड़ता है: दहाड़! और चिड़िया करती है चीं-चीं!",
-    gu: "સિંહ ગર્જના કરે છે, અને ચકલી કરે છે ચીં-ચીં!",
-  },
-  bedtime: {
-    en: "Time to rest little star. Good night and sweet dreams! Zzz...",
-    hi: "अब सोने का समय हो गया है। शुभ रात्रि और मीठे सपने! Zzz...",
-    gu: "હવે આરામ કરવાનો સમય છે. શુભ રાત્રી અને મીઠા સપના! Zzz...",
-  },
-};
+import { VoiceService } from '../services/voiceService';
 
 interface InteractionScreenProps {
   onOpenSettings: () => void;
@@ -58,18 +15,24 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
   const lang = child.preferredLanguage || 'en';
 
   const [charState, setCharState] = useState<CharacterState>('IDLE');
-  const [speechText, setSpeechText] = useState<string>(DIALOGUES.welcome[lang]);
-  const [isMicActive, setIsMicActive] = useState<boolean>(false);
+  const [speechText, setSpeechText] = useState<string>(
+    lang === 'hi'
+      ? `नमस्ते ${child.nickname || 'दोस्त'}! माइक दबाकर मुझसे कुछ भी पूछो!`
+      : lang === 'gu'
+      ? `નમસ્તે ${child.nickname || 'મિત્ર'}! માઈક દબાવીને મારી સાથે વાત કરો!`
+      : `Hi ${child.nickname || 'friend'}! Press the mic to talk with me!`
+  );
+  const [isRecording, setIsRecording] = useState<boolean>(false);
 
-  // Pulse animation for active mic button
+  // Pulse ring animation for mic
   const micPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null;
-    if (isMicActive) {
+    if (isRecording) {
       loop = Animated.loop(
         Animated.sequence([
-          Animated.timing(micPulse, { toValue: 1.15, duration: 400, useNativeDriver: true }),
+          Animated.timing(micPulse, { toValue: 1.25, duration: 400, useNativeDriver: true }),
           Animated.timing(micPulse, { toValue: 1, duration: 400, useNativeDriver: true }),
         ])
       );
@@ -80,53 +43,113 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
     return () => {
       if (loop) loop.stop();
     };
-  }, [isMicActive]);
+  }, [isRecording]);
 
-  // Voice Interaction Simulation (Full Phase 2 UX Pipeline)
-  const handleMicPress = () => {
-    if (isMicActive) return;
+  // Voice Interaction Trigger (Hold / Tap to Talk)
+  const handleToggleVoice = async () => {
+    if (!isRecording) {
+      // Start Recording
+      const started = await VoiceService.startRecording();
+      if (!started) {
+        Alert.alert(
+          'Microphone Permission',
+          'Please allow microphone access in settings so your child can speak with the companion.'
+        );
+        return;
+      }
 
-    setIsMicActive(true);
-    setCharState('LISTENING');
-    setSpeechText(DIALOGUES.listening[lang]);
-
-    // Step 1: Listening (2.2s) -> Thinking
-    setTimeout(() => {
+      setIsRecording(true);
+      setCharState('LISTENING');
+      setSpeechText(
+        lang === 'hi' 
+          ? 'मैं ध्यान से सुन रहा हूँ... बोलो!' 
+          : lang === 'gu' 
+          ? 'હું ધ્યાનથી સાંભળી રહ્યો છું... બોલો!' 
+          : "I'm listening carefully to you..."
+      );
+    } else {
+      // Stop Recording & Process Voice
+      setIsRecording(false);
       setCharState('THINKING');
-      setSpeechText(DIALOGUES.thinking[lang]);
+      setSpeechText(
+        lang === 'hi'
+          ? 'सोच रहा हूँ... एक प्यारा सा जवाब!'
+          : lang === 'gu'
+          ? 'હું વિચારું છું... એક સરસ જવાબ!'
+          : 'Thinking of a fun answer...'
+      );
 
-      // Step 2: Thinking (1.4s) -> Talking
-      setTimeout(() => {
-        setIsMicActive(false);
-        setCharState('TALKING');
-        setSpeechText(DIALOGUES.welcome[lang]);
+      const audioUri = await VoiceService.stopRecording();
 
-        // Step 3: Talking (4s) -> Happy / Idle
+      // Process through voice pipeline
+      setTimeout(async () => {
+        const result = await VoiceService.processVoice(
+          audioUri,
+          selectedCharacter,
+          lang,
+          child.nickname || 'friend'
+        );
+
+        setCharState(result.animationState);
+        setSpeechText(result.characterReply);
+
+        // After talking finishes, bounce happily and return to idle
         setTimeout(() => {
           setCharState('HAPPY');
           setTimeout(() => {
             setCharState('IDLE');
-          }, 2000);
-        }, 3800);
-      }, 1400);
-    }, 2200);
+          }, 1800);
+        }, result.speechDurationMs);
+      }, 1200);
+    }
   };
 
-  const handleQuickTopic = (key: 'rhyme' | 'counting' | 'animal' | 'bedtime') => {
-    if (key === 'bedtime') {
+  const handleQuickTopic = (topic: 'rhyme' | 'counting' | 'animals' | 'bedtime') => {
+    if (topic === 'bedtime') {
       setCharState('SLEEPING');
-      setSpeechText(DIALOGUES.bedtime[lang]);
+      setSpeechText(
+        lang === 'hi'
+          ? 'शुभ रात्रि प्यारे दोस्त! मीठे-मीठे सपने देखो! Zzz...'
+          : lang === 'gu'
+          ? 'શુભ રાત્રી વ્હાલા મિત્ર! મીઠા સપના જોજો! Zzz...'
+          : 'Good night little star! Sweet dreams! Zzz...'
+      );
       return;
     }
 
     setCharState('TALKING');
-    setSpeechText(DIALOGUES[key][lang]);
+    if (topic === 'rhyme') {
+      setSpeechText(
+        lang === 'hi'
+          ? 'तितली उड़ी बस पर चढ़ी, सीट ना मिली तो रोने लगी!'
+          : lang === 'gu'
+          ? 'ચકીબેન ચકીબેન મારી સાથે રમવા આવશો કે નહીં?'
+          : 'Twinkle twinkle little star, how I wonder what you are!'
+      );
+    } else if (topic === 'counting') {
+      setSpeechText(
+        lang === 'hi'
+          ? 'चलो साथ में गिनते हैं: एक, दो, तीन, चार, पाँच! शाबाश!'
+          : lang === 'gu'
+          ? 'ચાલો સાથે ગણીએ: એક, બે, ત્રણ, ચાર, પાંચ! બહુ સરસ!'
+          : "Let's count together: 1... 2... 3... 4... 5! High five!"
+      );
+    } else {
+      setSpeechText(
+        lang === 'hi'
+          ? 'शेर करता है: दहाड़! और चिड़िया करती है: चीं-चीं!'
+          : lang === 'gu'
+          ? 'સિંહ કરે છે: ગર્જના! અને ચકલી કરે છે: ચીં-ચીં!'
+          : 'Lions say roar! And little duckies say quack-quack!'
+      );
+    }
+
     setTimeout(() => {
       setCharState('HAPPY');
       setTimeout(() => {
         setCharState('IDLE');
-      }, 1800);
-    }, 3500);
+      }, 1600);
+    }, 3800);
   };
 
   return (
@@ -186,6 +209,7 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
             ]}
           />
           <Text style={styles.stateLabel}>{charState}</Text>
+          {isRecording && <Text style={styles.recordingLiveText}>• RECORDING LIVE</Text>}
         </View>
         <Text style={styles.speechText}>"{speechText}"</Text>
       </View>
@@ -208,7 +232,7 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionChip}
-          onPress={() => handleQuickTopic('animal')}
+          onPress={() => handleQuickTopic('animals')}
           activeOpacity={0.8}
         >
           <Text style={styles.chipText}>🐾 Animals</Text>
@@ -228,25 +252,26 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
           style={[
             styles.micPulseRing,
             { transform: [{ scale: micPulse }] },
-            isMicActive && styles.micPulseActive,
+            isRecording && styles.micPulseActive,
           ]}
         >
           <TouchableOpacity
             style={[
               styles.micButton,
-              { backgroundColor: currentChar.primaryColor },
-              isMicActive && styles.micButtonActive,
+              { backgroundColor: isRecording ? '#E91E63' : currentChar.primaryColor },
             ]}
             activeOpacity={0.85}
-            onPress={handleMicPress}
+            onPress={handleToggleVoice}
           >
             <Text style={styles.micEmoji}>
-              {isMicActive ? '👂' : '🎤'}
+              {isRecording ? '⏹️' : '🎤'}
             </Text>
           </TouchableOpacity>
         </Animated.View>
         <Text style={styles.micHint}>
-          {isMicActive ? 'Listening to child...' : 'Tap Mic to Speak with ' + currentChar.name}
+          {isRecording
+            ? 'Tap to Stop & Send Speech'
+            : `Tap Mic to Talk with ${currentChar.name}`}
         </Text>
       </View>
     </View>
@@ -343,6 +368,12 @@ const styles = StyleSheet.create({
     color: '#78909C',
     letterSpacing: 0.5,
   },
+  recordingLiveText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#D32F2F',
+    letterSpacing: 0.5,
+  },
   speechText: {
     fontSize: 15,
     fontWeight: '700',
@@ -384,7 +415,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   micPulseActive: {
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FFCDD2',
   },
   micButton: {
     width: 76,
@@ -398,11 +429,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  micButtonActive: {
-    backgroundColor: '#E91E63',
-  },
   micEmoji: {
-    fontSize: 34,
+    fontSize: 32,
   },
   micHint: {
     fontSize: 12,
