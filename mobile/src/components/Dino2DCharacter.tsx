@@ -8,37 +8,39 @@ interface Dino2DCharacterProps {
 }
 
 /**
- * 2D Animated Dino Character
- * Designed specifically for preschoolers (ages 3–5):
- * - Soft rounded shapes, vibrant friendly green and warm yellow.
- * - Dynamic animated reactions per state (Blinking, Talking mouth, Listening tilt, Happy bounce, Sleeping Zzz).
- * - 60 FPS native driver animations ensuring zero lag on budget Android devices.
+ * 2D Animated Dinosaur Character (Baby Dino)
+ * Distinctive Dinosaur features:
+ * - Prominent 3-tier dorsal spine crests (spikes) along the head & back
+ * - Adorable baby dino snout with nostrils
+ * - Cute dinosaur tail with spine ridge peeking on the side
+ * - Baby dino arms with claws
+ * - Native 60 FPS animated reactions (Breathing, Eye blink, Mouth speech, Listening tilt, Happy bounce, Sleeping Zzz)
  */
 export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({ 
   state, 
   size = 280 
 }) => {
-  // Animation values
   const breathAnim = useRef(new Animated.Value(1)).current;
   const mouthAnim = useRef(new Animated.Value(0)).current;
   const eyeBlinkAnim = useRef(new Animated.Value(1)).current;
   const tiltAnim = useRef(new Animated.Value(0)).current;
   const bounceAnim = useRef(new Animated.Value(0)).current;
+  const tailAnim = useRef(new Animated.Value(0)).current;
   const zzzAnim = useRef(new Animated.Value(0)).current;
 
-  // Idle Breathing Loop
+  // Breathing Loop
   useEffect(() => {
     const breathing = Animated.loop(
       Animated.sequence([
         Animated.timing(breathAnim, {
           toValue: 1.04,
-          duration: state === 'SLEEPING' ? 2200 : 1400,
+          duration: state === 'SLEEPING' ? 2200 : 1300,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(breathAnim, {
           toValue: 1,
-          duration: state === 'SLEEPING' ? 2200 : 1400,
+          duration: state === 'SLEEPING' ? 2200 : 1300,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -48,10 +50,32 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
     return () => breathing.stop();
   }, [state]);
 
-  // Eye Blinking Loop (periodic for all states except SLEEPING)
+  // Tail Wagging Loop
+  useEffect(() => {
+    const tailWag = Animated.loop(
+      Animated.sequence([
+        Animated.timing(tailAnim, {
+          toValue: 1,
+          duration: state === 'HAPPY' ? 300 : 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(tailAnim, {
+          toValue: -1,
+          duration: state === 'HAPPY' ? 300 : 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    tailWag.start();
+    return () => tailWag.stop();
+  }, [state]);
+
+  // Eye Blinking Loop
   useEffect(() => {
     if (state === 'SLEEPING') {
-      eyeBlinkAnim.setValue(0.1); // Closed eyes
+      eyeBlinkAnim.setValue(0.1);
       return;
     }
 
@@ -59,12 +83,12 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
       Animated.sequence([
         Animated.timing(eyeBlinkAnim, {
           toValue: 0.1,
-          duration: 120,
+          duration: 110,
           useNativeDriver: true,
         }),
         Animated.timing(eyeBlinkAnim, {
           toValue: 1,
-          duration: 120,
+          duration: 110,
           useNativeDriver: true,
         }),
       ]).start();
@@ -73,9 +97,8 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
     return () => clearInterval(blinkInterval);
   }, [state]);
 
-  // State-specific behavior
+  // State-specific Reactions
   useEffect(() => {
-    // Reset transient values
     tiltAnim.setValue(0);
     mouthAnim.setValue(0);
     bounceAnim.setValue(0);
@@ -85,18 +108,17 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
 
     switch (state) {
       case 'TALKING':
-        // Fast mouth opening and closing synchronized with speech
         activeLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(mouthAnim, {
               toValue: 1,
-              duration: 180,
+              duration: 170,
               easing: Easing.inOut(Easing.ease),
               useNativeDriver: false,
             }),
             Animated.timing(mouthAnim, {
               toValue: 0.1,
-              duration: 180,
+              duration: 170,
               easing: Easing.inOut(Easing.ease),
               useNativeDriver: false,
             }),
@@ -106,7 +128,6 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
         break;
 
       case 'LISTENING':
-        // Attentive head tilt towards the child
         Animated.spring(tiltAnim, {
           toValue: 1,
           friction: 4,
@@ -115,17 +136,16 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
         break;
 
       case 'THINKING':
-        // Slight pondering tilt in opposite direction with gentle bob
         activeLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(tiltAnim, {
-              toValue: -0.8,
+              toValue: -0.75,
               duration: 900,
               easing: Easing.inOut(Easing.ease),
               useNativeDriver: true,
             }),
             Animated.timing(tiltAnim, {
-              toValue: -0.4,
+              toValue: -0.35,
               duration: 900,
               easing: Easing.inOut(Easing.ease),
               useNativeDriver: true,
@@ -136,38 +156,36 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
         break;
 
       case 'HAPPY':
-        // Cheerful bouncing animation
         activeLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(bounceAnim, {
-              toValue: -28,
-              duration: 260,
+              toValue: -26,
+              duration: 250,
               easing: Easing.out(Easing.quad),
               useNativeDriver: true,
             }),
             Animated.timing(bounceAnim, {
               toValue: 0,
-              duration: 260,
+              duration: 250,
               easing: Easing.in(Easing.quad),
               useNativeDriver: true,
             }),
           ])
         );
         activeLoop.start();
+        mouthAnim.setValue(0.8);
         break;
 
       case 'SURPRISED':
-        // Wide-eyed pop and lift
         Animated.spring(bounceAnim, {
-          toValue: -14,
+          toValue: -15,
           friction: 3,
           useNativeDriver: true,
         }).start();
-        mouthAnim.setValue(0.9);
+        mouthAnim.setValue(1);
         break;
 
       case 'SLEEPING':
-        // Floating Zzz animation
         activeLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(zzzAnim, {
@@ -196,7 +214,6 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
     };
   }, [state]);
 
-  // Interpolations
   const headRotation = tiltAnim.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: ['-12deg', '0deg', '12deg'],
@@ -204,12 +221,17 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
 
   const mouthHeight = mouthAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [4, 26],
+    outputRange: [5, 28],
+  });
+
+  const tailRotation = tailAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-18deg', '18deg'],
   });
 
   const zzzTranslateY = zzzAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, -35],
+    outputRange: [0, -36],
   });
 
   const zzzOpacity = zzzAnim.interpolate({
@@ -225,7 +247,7 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
           style={[
             styles.zzzContainer,
             {
-              transform: [{ translateY: zzzTranslateY }, { translateX: 25 }],
+              transform: [{ translateY: zzzTranslateY }, { translateX: 30 }],
               opacity: zzzOpacity,
             },
           ]}
@@ -234,7 +256,7 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
         </Animated.View>
       )}
 
-      {/* Main Character Body & Head with Breathing and Bounce */}
+      {/* Main Character with Bounce, Breathing, and Head Tilt */}
       <Animated.View
         style={[
           styles.characterWrapper,
@@ -247,23 +269,45 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
           },
         ]}
       >
-        {/* Dinosaur Back Spikes */}
-        <View style={styles.spikesContainer}>
-          <View style={[styles.spike, styles.spike1]} />
-          <View style={[styles.spike, styles.spike2]} />
-          <View style={[styles.spike, styles.spike3]} />
+        {/* Prominent Dinosaur Crest Spikes (Head & Spine) */}
+        <View style={styles.crestRow}>
+          <View style={[styles.crestSpike, styles.crest1]} />
+          <View style={[styles.crestSpike, styles.crest2]} />
+          <View style={[styles.crestSpike, styles.crest3]} />
         </View>
+
+        {/* Dinosaur Tail (Wagging on the right side) */}
+        <Animated.View
+          style={[
+            styles.tailContainer,
+            {
+              transform: [{ rotate: tailRotation }],
+            },
+          ]}
+        >
+          <View style={styles.tail} />
+          <View style={styles.tailSpike} />
+        </Animated.View>
 
         {/* Dino Body */}
         <View style={styles.body}>
-          {/* Yellow Belly Patch */}
-          <View style={styles.belly} />
+          {/* Yellow Belly Patch with subtle dinosaur scales */}
+          <View style={styles.belly}>
+            <View style={styles.scaleLine1} />
+            <View style={styles.scaleLine2} />
+          </View>
 
-          {/* Cute Little Dino Arms */}
-          <View style={[styles.arm, styles.leftArm]} />
-          <View style={[styles.arm, styles.rightArm]} />
+          {/* Little T-Rex Arms with Tiny Claws */}
+          <View style={[styles.armWrapper, styles.leftArmWrapper]}>
+            <View style={styles.arm} />
+            <View style={styles.claw} />
+          </View>
+          <View style={[styles.armWrapper, styles.rightArmWrapper]}>
+            <View style={styles.arm} />
+            <View style={styles.claw} />
+          </View>
 
-          {/* Dino Head */}
+          {/* Dino Head & Snout */}
           <View style={styles.head}>
             {/* Eyes */}
             <View style={styles.eyesRow}>
@@ -274,9 +318,7 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
                   {
                     transform: [
                       { scaleY: eyeBlinkAnim },
-                      {
-                        translateY: state === 'THINKING' ? -3 : 0,
-                      },
+                      { translateY: state === 'THINKING' ? -3 : 0 },
                     ],
                   },
                 ]}
@@ -288,10 +330,11 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
                       state === 'THINKING' && styles.pupilThinking,
                       state === 'LISTENING' && styles.pupilListening,
                     ]}
-                  />
+                  >
+                    <View style={styles.eyeSparkle1} />
+                    <View style={styles.eyeSparkle2} />
+                  </View>
                 )}
-                {/* Cute eye highlight */}
-                {state !== 'SLEEPING' && <View style={styles.eyeHighlight} />}
               </Animated.View>
 
               {/* Right Eye */}
@@ -301,9 +344,7 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
                   {
                     transform: [
                       { scaleY: eyeBlinkAnim },
-                      {
-                        translateY: state === 'THINKING' ? -3 : 0,
-                      },
+                      { translateY: state === 'THINKING' ? -3 : 0 },
                     ],
                   },
                 ]}
@@ -315,35 +356,56 @@ export const Dino2DCharacter: React.FC<Dino2DCharacterProps> = ({
                       state === 'THINKING' && styles.pupilThinking,
                       state === 'LISTENING' && styles.pupilListening,
                     ]}
-                  />
+                  >
+                    <View style={styles.eyeSparkle1} />
+                    <View style={styles.eyeSparkle2} />
+                  </View>
                 )}
-                {state !== 'SLEEPING' && <View style={styles.eyeHighlight} />}
               </Animated.View>
             </View>
 
-            {/* Rosy Cheeks */}
-            <View style={styles.cheeksRow}>
-              <View style={styles.cheek} />
-              <View style={styles.cheek} />
-            </View>
+            {/* Dinosaur Snout & Cute Nostrils */}
+            <View style={styles.snout}>
+              <View style={styles.nostrilRow}>
+                <View style={styles.nostril} />
+                <View style={styles.nostril} />
+              </View>
 
-            {/* Animated Mouth */}
-            <View style={styles.mouthWrapper}>
-              <Animated.View
-                style={[
-                  styles.mouth,
-                  { height: mouthHeight },
-                  state === 'HAPPY' && styles.mouthHappy,
-                  state === 'SURPRISED' && styles.mouthSurprised,
-                ]}
-              />
+              {/* Rosy Dinosaur Cheeks */}
+              <View style={styles.cheeksRow}>
+                <View style={styles.cheek} />
+                <View style={styles.cheek} />
+              </View>
+
+              {/* Mouth with Baby Dino Tooth */}
+              <View style={styles.mouthWrapper}>
+                <Animated.View
+                  style={[
+                    styles.mouth,
+                    { height: mouthHeight },
+                    state === 'HAPPY' && styles.mouthHappy,
+                    state === 'SURPRISED' && styles.mouthSurprised,
+                  ]}
+                >
+                  {/* Cute baby dino tooth */}
+                  {(state === 'TALKING' || state === 'HAPPY') && (
+                    <View style={styles.tooth} />
+                  )}
+                </Animated.View>
+              </View>
             </View>
           </View>
 
-          {/* Dino Feet */}
+          {/* Dinosaur Feet with Toes */}
           <View style={styles.feetRow}>
-            <View style={styles.foot} />
-            <View style={styles.foot} />
+            <View style={styles.foot}>
+              <View style={styles.toe} />
+              <View style={styles.toe} />
+            </View>
+            <View style={styles.foot}>
+              <View style={styles.toe} />
+              <View style={styles.toe} />
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -360,61 +422,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  spikesContainer: {
+  crestRow: {
     position: 'absolute',
-    top: 15,
-    alignItems: 'center',
+    top: -14,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
     zIndex: 1,
+    gap: 8,
   },
-  spike: {
-    width: 22,
-    height: 22,
-    backgroundColor: '#388E3C', // Darker forest green
+  crestSpike: {
+    backgroundColor: '#FF9800', // Vibrant friendly orange dinosaur spikes
+    borderRadius: 6,
     transform: [{ rotate: '45deg' }],
-    borderRadius: 5,
-    marginVertical: -3,
+    borderWidth: 2,
+    borderColor: '#F57C00',
   },
-  spike1: { top: 0, left: -2 },
-  spike2: { top: 12, left: -4, width: 26, height: 26 },
-  spike3: { top: 26, left: -2 },
+  crest1: { width: 22, height: 22 },
+  crest2: { width: 28, height: 28, top: -4 },
+  crest3: { width: 22, height: 22 },
+  tailContainer: {
+    position: 'absolute',
+    right: -42,
+    bottom: 25,
+    zIndex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tail: {
+    width: 52,
+    height: 32,
+    backgroundColor: '#4CAF50',
+    borderTopRightRadius: 28,
+    borderBottomRightRadius: 8,
+    borderWidth: 2,
+    borderColor: '#388E3C',
+  },
+  tailSpike: {
+    position: 'absolute',
+    right: -2,
+    top: 2,
+    width: 14,
+    height: 14,
+    backgroundColor: '#FF9800',
+    transform: [{ rotate: '45deg' }],
+    borderRadius: 3,
+  },
   body: {
-    width: 170,
-    height: 200,
-    backgroundColor: '#4CAF50', // Vibrant friendly dino green
-    borderRadius: 85,
+    width: 185,
+    height: 205,
+    backgroundColor: '#4CAF50',
+    borderRadius: 90,
     alignItems: 'center',
     justifyContent: 'flex-start',
     shadowColor: '#1B5E20',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
     elevation: 8,
     zIndex: 2,
-    paddingTop: 18,
+    paddingTop: 16,
+    borderWidth: 3,
+    borderColor: '#388E3C',
   },
   belly: {
     position: 'absolute',
-    bottom: 22,
-    width: 100,
+    bottom: 20,
+    width: 115,
     height: 110,
-    backgroundColor: '#FFF59D', // Soft cream/yellow belly
-    borderRadius: 50,
+    backgroundColor: '#FFF9C4', // Soft cream-yellow tummy
+    borderRadius: 55,
+    borderWidth: 2,
+    borderColor: '#FFF176',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  scaleLine1: {
+    width: 32,
+    height: 3,
+    backgroundColor: '#FFE082',
+    borderRadius: 2,
+  },
+  scaleLine2: {
+    width: 44,
+    height: 3,
+    backgroundColor: '#FFE082',
+    borderRadius: 2,
+  },
+  armWrapper: {
+    position: 'absolute',
+    top: 108,
+    zIndex: 4,
+  },
+  leftArmWrapper: {
+    left: -12,
+    transform: [{ rotate: '20deg' }],
+  },
+  rightArmWrapper: {
+    right: -12,
+    transform: [{ rotate: '-20deg' }],
   },
   arm: {
-    position: 'absolute',
-    top: 100,
-    width: 28,
-    height: 22,
+    width: 32,
+    height: 20,
     backgroundColor: '#43A047',
-    borderRadius: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#2E7D32',
   },
-  leftArm: {
-    left: -10,
-    transform: [{ rotate: '25deg' }],
-  },
-  rightArm: {
-    right: -10,
-    transform: [{ rotate: '-25deg' }],
+  claw: {
+    position: 'absolute',
+    right: 2,
+    top: 6,
+    width: 6,
+    height: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 3,
   },
   head: {
     alignItems: 'center',
@@ -423,98 +547,149 @@ const styles = StyleSheet.create({
   eyesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: 90,
-    marginTop: 10,
+    width: 95,
+    marginTop: 6,
   },
   eye: {
-    width: 32,
-    height: 36,
+    width: 36,
+    height: 40,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
     borderColor: '#2E7D32',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
   },
   pupil: {
-    width: 16,
-    height: 18,
+    width: 20,
+    height: 22,
     backgroundColor: '#1B5E20',
-    borderRadius: 9,
+    borderRadius: 11,
+    position: 'relative',
   },
   pupilThinking: {
     transform: [{ translateY: -5 }],
   },
   pupilListening: {
-    transform: [{ translateX: 3 }],
+    transform: [{ translateX: 4 }],
   },
-  eyeHighlight: {
+  eyeSparkle1: {
     position: 'absolute',
-    top: 5,
-    left: 7,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    top: 3,
+    left: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: '#FFFFFF',
+  },
+  eyeSparkle2: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  snout: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  nostrilRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 24,
+    marginBottom: 2,
+  },
+  nostril: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#2E7D32',
   },
   cheeksRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: 110,
-    marginTop: 4,
+    width: 125,
+    marginTop: -8,
   },
   cheek: {
-    width: 16,
+    width: 18,
     height: 10,
     backgroundColor: '#FF8A80',
     borderRadius: 8,
-    opacity: 0.7,
+    opacity: 0.75,
   },
   mouthWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
-    height: 30,
+    height: 32,
   },
   mouth: {
-    width: 24,
-    backgroundColor: '#D32F2F',
-    borderRadius: 12,
+    width: 26,
+    backgroundColor: '#C62828',
+    borderRadius: 13,
+    overflow: 'hidden',
+    alignItems: 'center',
   },
   mouthHappy: {
-    width: 34,
-    height: 20,
-    backgroundColor: '#C62828',
-    borderRadius: 10,
+    width: 38,
+    height: 22,
+    backgroundColor: '#B71C1C',
+    borderRadius: 11,
   },
   mouthSurprised: {
-    width: 22,
-    height: 26,
-    borderRadius: 11,
+    width: 24,
+    height: 28,
+    borderRadius: 12,
     backgroundColor: '#B71C1C',
+  },
+  tooth: {
+    width: 6,
+    height: 6,
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
   },
   feetRow: {
     position: 'absolute',
-    bottom: -12,
+    bottom: -14,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: 115,
+    width: 125,
   },
   foot: {
-    width: 44,
-    height: 22,
+    width: 48,
+    height: 24,
     backgroundColor: '#388E3C',
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#2E7D32',
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'flex-end',
+    paddingBottom: 2,
+  },
+  toe: {
+    width: 8,
+    height: 6,
+    backgroundColor: '#FFF9C4',
+    borderRadius: 3,
   },
   zzzContainer: {
     position: 'absolute',
-    top: -20,
-    right: 20,
+    top: -24,
+    right: 15,
     zIndex: 10,
   },
   zzzText: {
-    fontSize: 26,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '900',
     color: '#3F51B5',
   },
 });

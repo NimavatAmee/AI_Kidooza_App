@@ -50,7 +50,9 @@ export const VoiceStatusCard: React.FC<VoiceStatusCardProps> = ({
         <View style={styles.pulseDot} />
         <Text style={styles.badgeText}>{current.badge}</Text>
       </View>
-      <Text style={styles.dialogueText}>"{current.text}"</Text>
+      <Text style={styles.dialogueText} numberOfLines={3} ellipsizeMode="tail">
+        "{current.text}"
+      </Text>
     </View>
   );
 };
@@ -58,49 +60,51 @@ export const VoiceStatusCard: React.FC<VoiceStatusCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     paddingVertical: 14,
-    paddingHorizontal: 18,
-    marginHorizontal: 20,
-    marginVertical: 12,
+    paddingHorizontal: 20,
+    marginHorizontal: 16,
+    marginVertical: 10,
     alignItems: 'center',
-    shadowColor: '#000',
+    alignSelf: 'stretch',
+    shadowColor: '#1B5E20',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    borderWidth: 1,
-    borderColor: '#E0F2F1',
+    borderWidth: 1.5,
+    borderColor: '#C8E6C9',
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E8F5E9',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginBottom: 8,
   },
   pulseDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#43A047',
     marginRight: 6,
   },
   badgeText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#2E7D32',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   dialogueText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#37474F',
+    color: '#263238',
     textAlign: 'center',
     fontStyle: 'italic',
-    lineHeight: 21,
+    lineHeight: 22,
+    paddingHorizontal: 8,
   },
 });
