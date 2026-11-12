@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CharacterId, AppLanguage } from '../types/character';
 import { ApiClient } from '../services/apiClient';
 
 export type ScreenName = 
   | 'welcome'
+  | 'onboarding'
   | 'parent-login'
+  | 'parent-register'
   | 'consent'
   | 'child-profile'
   | 'language-select'
@@ -36,8 +39,10 @@ interface AppContextType {
   sessionSecondsRemaining: number;
   isBedtimeLocked: boolean;
   currentSessionId: string | null;
+  isLoadingSession: boolean;
   goToScreen: (screen: ScreenName) => void;
-  loginParent: (email: string) => Promise<void>;
+  registerParent: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginParent: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   recordConsent: () => Promise<void>;
   updateChildProfile: (profile: Partial<ChildProfile>) => Promise<void>;
   selectLanguage: (lang: AppLanguage) => void;
@@ -46,15 +51,23 @@ interface AppContextType {
   extendSessionTime: (additionalMinutes: number) => void;
   unlockBedtime: () => void;
   logoutParent: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
+
+const STORAGE_KEYS = {
+  PARENT: '@kidooza_parent_account',
+  CHILD: '@kidooza_child_profile',
+  ONBOARDING: '@kidooza_onboarding_completed',
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentScreen, setCurrentScreen] = useState<ScreenName>('welcome');
+  const [isLoadingSession, setIsLoadingSession] = useState<boolean>(true);
 
   const [parent, setParent] = useState<ParentAccount>({
-    email: 'parent@example.com',
+    email: '',
     isLoggedIn: false,
     hasConsented: false,
     sessionLimitMinutes: 20,
@@ -74,6 +87,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const sessionStartTimeRef = useRef<number>(Date.now());
+
+  // 1. Persistent Authentication Restore on App Launch
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const [savedParent, savedChild, onboardingDone] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.PARENT),
+          AsyncStorage.getItem(STORAGE_KEYS.CHILD),
+          AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING),
+        ]);
+
+        if (savedChild) {
+          const parsedChild = JSON.parse(savedChild);
+          setChild(parsedChild);
+        }
+
+        if (savedParent) {
+          const parsedParent: ParentAccount = JSON.parse(savedParent);
+          if (parsedParent.isLoggedIn) {
+            setParent(parsedParent);
+            setSessionSecondsRemaining(parsedParent.sessionLimitMinutes * 60);
+
+            // User is already logged in! Skip login screens automatically
+            if (parsedParent.hasConsented) {
+              setCurrentScreen('character-select');
+            } else {
+              setCurrentScreen('consent');
+            }
+            setIsLoadingSession(false);
+            return;
+          }
+        }
+
+        // If not logged in, check if onboarding has been shown
+        if (!onboardingDone) {
+          setCurrentScreen('onboarding');
+        } else {
+          setCurrentScreen('welcome');
+        }
+      } catch (err) {
+        console.warn('Failed to restore persistent session:', err);
+        setCurrentScreen('welcome');
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+
+    restoreSession();
+  }, []);
 
   // Countdown timer during active child interaction
   useEffect(() => {
@@ -109,34 +171,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentScreen(screen);
   };
 
-  const loginParent = async (email: string) => {
-    // Call live backend API
-    const response = await ApiClient.parentLogin(email);
-    const parentId = response.data?.id || `parent-${Date.now()}`;
+  const completeOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING, 'true');
+    } catch {}
+    setCurrentScreen('welcome');
+  };
 
-    setParent((prev) => ({
-      ...prev,
+  // Register New Parent & Persist Session
+  const registerParent = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const response = await ApiClient.parentRegister(email, password);
+    if (!response.success) {
+      return { success: false, error: response.error || 'Registration failed' };
+    }
+
+    const parentId = response.data?.id || `parent-${Date.now()}`;
+    const newParent: ParentAccount = {
       id: parentId,
       email,
       isLoggedIn: true,
-    }));
+      hasConsented: false,
+      sessionLimitMinutes: response.data?.sessionLimitMinutes || 20,
+    };
 
-    if (!parent.hasConsented) {
-      setCurrentScreen('consent');
-    } else {
-      setCurrentScreen('child-profile');
+    setParent(newParent);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PARENT, JSON.stringify(newParent));
+    } catch {}
+
+    setCurrentScreen('consent');
+    return { success: true };
+  };
+
+  // Login Existing Parent & Persist Session
+  const loginParent = async (email: string, password?: string): Promise<{ success: boolean; error?: string }> => {
+    const response = await ApiClient.parentLogin(email, password);
+    if (!response.success) {
+      return { success: false, error: response.error || 'Login failed' };
     }
+
+    const parentId = response.data?.id || `parent-${Date.now()}`;
+    const loggedInParent: ParentAccount = {
+      id: parentId,
+      email,
+      isLoggedIn: true,
+      hasConsented: true, // Returning parents maintain verified consent
+      sessionLimitMinutes: response.data?.sessionLimitMinutes || 20,
+    };
+
+    setParent(loggedInParent);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PARENT, JSON.stringify(loggedInParent));
+    } catch {}
+
+    setCurrentScreen('character-select');
+    return { success: true };
   };
 
   const recordConsent = async () => {
-    // Call live backend API to record verifiable consent in PostgreSQL
     await ApiClient.recordConsent(parent.id || 'parent-active', child.id);
 
-    setParent((prev) => ({
-      ...prev,
+    const updatedParent: ParentAccount = {
+      ...parent,
       hasConsented: true,
       consentTimestamp: new Date().toISOString(),
-    }));
+    };
+    setParent(updatedParent);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PARENT, JSON.stringify(updatedParent));
+    } catch {}
+
     setCurrentScreen('child-profile');
   };
 
@@ -144,7 +248,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = { ...child, ...profile };
     setChild(updated);
 
-    // Call live backend API to save profile in database
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.CHILD, JSON.stringify(updated));
+    } catch {}
+
     const response = await ApiClient.createChild(
       parent.id || 'parent-active',
       updated.nickname,
@@ -153,12 +260,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     if (response.data?.id) {
-      setChild((prev) => ({ ...prev, id: response.data.id }));
+      const savedChild = { ...updated, id: response.data.id };
+      setChild(savedChild);
+      try {
+        await AsyncStorage.setItem(STORAGE_KEYS.CHILD, JSON.stringify(savedChild));
+      } catch {}
     }
   };
 
   const selectLanguage = (lang: AppLanguage) => {
-    setChild((prev) => ({ ...prev, preferredLanguage: lang }));
+    const updated = { ...child, preferredLanguage: lang };
+    setChild(updated);
+    try {
+      AsyncStorage.setItem(STORAGE_KEYS.CHILD, JSON.stringify(updated));
+    } catch {}
     setCurrentScreen('character-select');
   };
 
@@ -168,7 +283,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsBedtimeLocked(false);
     sessionStartTimeRef.current = Date.now();
 
-    // Call live backend API to start tracking session
     const response = await ApiClient.startSession(
       child.id || 'child-default',
       charId,
@@ -183,8 +297,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSessionLimit = (minutes: number) => {
-    setParent((prev) => ({ ...prev, sessionLimitMinutes: minutes }));
+    const updated = { ...parent, sessionLimitMinutes: minutes };
+    setParent(updated);
     setSessionSecondsRemaining(minutes * 60);
+    try {
+      AsyncStorage.setItem(STORAGE_KEYS.PARENT, JSON.stringify(updated));
+    } catch {}
   };
 
   const extendSessionTime = (additionalMinutes: number) => {
@@ -197,11 +315,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSessionSecondsRemaining(10 * 60); // Grant +10 mins upon parent unlock
   };
 
+  // Explicit Parent Logout: Clears storage so app will require sign in
   const logoutParent = async () => {
-    // If child ID exists, notify backend
     if (child.id) {
       await ApiClient.deleteChildData(child.id);
     }
+
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.PARENT);
+      await AsyncStorage.removeItem(STORAGE_KEYS.CHILD);
+    } catch {}
 
     setParent({
       email: '',
@@ -224,7 +347,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sessionSecondsRemaining,
         isBedtimeLocked,
         currentSessionId,
+        isLoadingSession,
         goToScreen,
+        registerParent,
         loginParent,
         recordConsent,
         updateChildProfile,
@@ -234,6 +359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         extendSessionTime,
         unlockBedtime,
         logoutParent,
+        completeOnboarding,
       }}
     >
       {children}

@@ -14,6 +14,9 @@ datasource db {
 model Parent {
   id                   String            @id @default(uuid())
   email                String            @unique
+  passwordHash         String?           @map("password_hash")
+  resetCode            String?           @map("reset_code")
+  resetCodeExpiry      DateTime?         @map("reset_code_expiry")
   authProviderId       String?           @map("auth_provider_id")
   sessionLimitMinutes  Int               @default(20) @map("session_limit_minutes")
   createdAt            DateTime          @default(now()) @map("created_at")

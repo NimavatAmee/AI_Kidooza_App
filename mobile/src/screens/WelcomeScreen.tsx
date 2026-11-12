@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { Dino2DCharacter } from '../components/Dino2DCharacter';
 
@@ -19,14 +19,14 @@ export const WelcomeScreen: React.FC = () => {
 
       {/* Mascot Hero Preview */}
       <View style={styles.mascotStage}>
-        <Dino2DCharacter state="HAPPY" size={240} />
+        <Dino2DCharacter state="HAPPY" size={230} />
       </View>
 
       {/* Feature Highlights */}
       <View style={styles.featuresCard}>
         <View style={styles.featureItem}>
           <Text style={styles.featureIcon}>🗣️</Text>
-          <Text style={styles.featureText}>Natural Voice Conversations</Text>
+          <Text style={styles.featureText}>Natural AI Voice Conversations</Text>
         </View>
         <View style={styles.featureItem}>
           <Text style={styles.featureIcon}>🇮🇳</Text>
@@ -34,23 +34,34 @@ export const WelcomeScreen: React.FC = () => {
         </View>
         <View style={styles.featureItem}>
           <Text style={styles.featureIcon}>🛡️</Text>
-          <Text style={styles.featureText}>100% Kid Safe • No Ads</Text>
+          <Text style={styles.featureText}>100% Kid Safe • Auto Bedtime Lock</Text>
         </View>
       </View>
 
-      {/* Call to Action */}
+      {/* Actions: Register / Sign In / Onboarding */}
       <View style={styles.actionContainer}>
         <TouchableOpacity
           style={styles.primaryButton}
           activeOpacity={0.85}
-          onPress={() => goToScreen('parent-login')}
+          onPress={() => goToScreen('parent-register')}
         >
-          <Text style={styles.primaryButtonText}>Parent Get Started →</Text>
+          <Text style={styles.primaryButtonText}>First Time? Create Account →</Text>
         </TouchableOpacity>
 
-        <Text style={styles.complianceNote}>
-          Parental verification required to protect child privacy.
-        </Text>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          activeOpacity={0.85}
+          onPress={() => goToScreen('parent-login')}
+        >
+          <Text style={styles.secondaryButtonText}>Already Have Account? Sign In</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.introLink}
+          onPress={() => goToScreen('onboarding')}
+        >
+          <Text style={styles.introLinkText}>✨ Take Interactive Feature Tour</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -62,12 +73,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F8E9',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 20,
   },
   brandContainer: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   badge: {
     backgroundColor: '#C8E6C9',
@@ -83,13 +94,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   appName: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '900',
     color: '#1B5E20',
     letterSpacing: -0.5,
   },
   tagline: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#558B2F',
     fontWeight: '600',
     marginTop: 2,
@@ -97,12 +108,12 @@ const styles = StyleSheet.create({
   mascotStage: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 10,
+    marginVertical: 4,
   },
   featuresCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 18,
     width: '100%',
     shadowColor: '#1B5E20',
@@ -112,7 +123,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1.5,
     borderColor: '#E8F5E9',
-    gap: 10,
+    gap: 8,
   },
   featureItem: {
     flexDirection: 'row',
@@ -123,7 +134,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   featureText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#37474F',
   },
@@ -131,29 +142,47 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     gap: 8,
+    marginVertical: 6,
   },
   primaryButton: {
-    backgroundColor: '#43A047',
-    paddingVertical: 15,
-    borderRadius: 24,
+    backgroundColor: '#2E7D32',
+    paddingVertical: 13,
+    borderRadius: 20,
     width: '100%',
     alignItems: 'center',
     shadowColor: '#2E7D32',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  complianceNote: {
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#81C784',
+    paddingVertical: 12,
+    borderRadius: 20,
+    width: '100%',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#2E7D32',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  introLink: {
+    paddingVertical: 4,
+  },
+  introLinkText: {
     fontSize: 12,
-    color: '#7CB342',
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '700',
+    color: '#689F38',
+    textDecorationLine: 'underline',
   },
 });

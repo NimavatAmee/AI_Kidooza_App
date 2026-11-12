@@ -5,6 +5,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  resetCode?: string;
 }
 
 export class ApiClient {
@@ -15,7 +16,7 @@ export class ApiClient {
     try {
       const url = `${API_BASE_URL}${endpoint}`;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout for fast mobile response
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout for AI response
 
       const response = await fetch(url, {
         ...options,
@@ -40,17 +41,51 @@ export class ApiClient {
   }
 
   /**
-   * 1. Parent Login / Registration
+   * 1. Parent Register (Email & Password)
    */
-  public static async parentLogin(email: string): Promise<ApiResponse> {
+  public static async parentRegister(email: string, password: string): Promise<ApiResponse> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  /**
+   * 2. Parent Login (Email & Password)
+   */
+  public static async parentLogin(email: string, password?: string): Promise<ApiResponse> {
     return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  /**
+   * 3. Forgot Password Request (Generates 6-digit Reset Code)
+   */
+  public static async forgotPassword(email: string): Promise<ApiResponse> {
+    return this.request('/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
   }
 
   /**
-   * 2. Record Parental Consent (DPDP Act)
+   * 4. Reset Password with Code
+   */
+  public static async resetPassword(
+    email: string,
+    resetCode: string,
+    newPassword: string
+  ): Promise<ApiResponse> {
+    return this.request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, resetCode, newPassword }),
+    });
+  }
+
+  /**
+   * 5. Record Parental Consent (DPDP Act)
    */
   public static async recordConsent(parentId: string, childId?: string): Promise<ApiResponse> {
     return this.request('/auth/consent', {
@@ -60,7 +95,7 @@ export class ApiClient {
   }
 
   /**
-   * 3. Create Child Profile
+   * 6. Create Child Profile
    */
   public static async createChild(
     parentId: string,
@@ -75,7 +110,7 @@ export class ApiClient {
   }
 
   /**
-   * 4. Start Companion Session
+   * 7. Start Companion Session
    */
   public static async startSession(
     childId: string,
@@ -89,23 +124,31 @@ export class ApiClient {
   }
 
   /**
-   * 5. Send Conversation Message (with Child Safety Check)
+   * 8. Send Conversation Message (with Real AI and Child Safety Check)
    */
   public static async sendMessage(
     sessionId: string,
     childId: string,
     characterId: string,
     text: string,
-    language: string
+    language: string,
+    childNickname?: string
   ): Promise<ApiResponse> {
     return this.request('/conversations/message', {
       method: 'POST',
-      body: JSON.stringify({ sessionId, childId, characterId, text, language }),
+      body: JSON.stringify({
+        sessionId,
+        childId,
+        characterId,
+        text,
+        language,
+        childNickname,
+      }),
     });
   }
 
   /**
-   * 6. End Session and Record Duration
+   * 9. End Session and Record Duration
    */
   public static async endSession(
     sessionId: string,
@@ -118,7 +161,7 @@ export class ApiClient {
   }
 
   /**
-   * 7. Delete Child Data (DPDP Act right to erasure)
+   * 10. Delete Child Data (DPDP Act right to erasure)
    */
   public static async deleteChildData(childId: string): Promise<ApiResponse> {
     return this.request(`/children/${childId}`, {

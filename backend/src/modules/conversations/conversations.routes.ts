@@ -31,6 +31,7 @@ const MessageSchema = z.object({
     characterId: z.string().min(1, 'Character ID required'),
     text: z.string().min(1, 'Message text required'),
     language: z.enum(['en', 'hi', 'gu']).default('en'),
+    childNickname: z.string().optional(),
   }),
 });
 
@@ -160,9 +161,9 @@ conversationsRouter.post('/speech', upload.single('audio'), async (req: Request,
   }
 });
 
-// POST /api/conversations/message (Direct Text Route)
+// POST /api/conversations/message (Direct Text / AI Route)
 conversationsRouter.post('/message', validateRequest(MessageSchema), async (req: Request, res: Response) => {
-  const { sessionId, childId, characterId, text, language } = req.body;
+  const { sessionId, childId, characterId, text, language, childNickname } = req.body;
 
   const inputCheck = SafetyService.validateInput(text, language);
   if (!inputCheck.isSafe) {
@@ -176,7 +177,7 @@ conversationsRouter.post('/message', validateRequest(MessageSchema), async (req:
     });
   }
 
-  const aiReply = await AiService.generateResponse(text, characterId, language, 'friend');
+  const aiReply = await AiService.generateResponse(text, characterId, language, childNickname || 'friend');
   const outputCheck = SafetyService.validateOutput(aiReply.text, language);
 
   return res.json({
@@ -185,6 +186,7 @@ conversationsRouter.post('/message', validateRequest(MessageSchema), async (req:
       text: outputCheck.sanitizedText,
       animationState: aiReply.animationState,
       safetyTriggered: false,
+      isAiGenerated: aiReply.isAiGenerated || false,
     },
   });
 });

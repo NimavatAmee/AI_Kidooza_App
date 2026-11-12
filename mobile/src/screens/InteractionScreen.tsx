@@ -5,6 +5,8 @@ import { CharacterState, CHARACTERS } from '../types/character';
 import { CharacterViewer } from '../components/CharacterViewer';
 import { VoiceService } from '../services/voiceService';
 import { BedtimeLockModal } from '../components/BedtimeLockModal';
+import { AiVoiceModal } from '../components/AiVoiceModal';
+import { ApiClient } from '../services/apiClient';
 
 interface InteractionScreenProps {
   onOpenSettings: () => void;
@@ -17,6 +19,7 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
     goToScreen,
     sessionSecondsRemaining,
     isBedtimeLocked,
+    currentSessionId,
   } = useApp();
 
   const currentChar = CHARACTERS[selectedCharacter] || CHARACTERS.dino;
@@ -25,33 +28,27 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
   const [charState, setCharState] = useState<CharacterState>('IDLE');
   const [speechText, setSpeechText] = useState<string>(
     lang === 'hi'
-      ? `नमस्ते ${child.nickname || 'दोस्त'}! माइक दबाकर मुझसे बातें करो!`
+      ? `नमस्ते ${child.nickname || 'दोस्त'}! माइक दबाकर मुझसे कुछ भी पूछो!`
       : lang === 'gu'
-      ? `નમસ્તે ${child.nickname || 'મિત્ર'}! માઈક દબાવીને મારી સાથે વાતો કરો!`
+      ? `નમસ્તે ${child.nickname || 'મિત્ર'}! માઈક દબાવીને મને કંઈપણ પૂછો!`
       : `Hi ${child.nickname || 'friend'}! Tap the mic to talk with me!`
   );
-  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isVoiceModalVisible, setIsVoiceModalVisible] = useState<boolean>(false);
+  const [isAiBadgeVisible, setIsAiBadgeVisible] = useState<boolean>(false);
 
   // Pulse ring animation for mic button
   const micPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    let loop: Animated.CompositeAnimation | null = null;
-    if (isRecording) {
-      loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(micPulse, { toValue: 1.25, duration: 400, useNativeDriver: true }),
-          Animated.timing(micPulse, { toValue: 1, duration: 400, useNativeDriver: true }),
-        ])
-      );
-      loop.start();
-    } else {
-      micPulse.setValue(1);
-    }
-    return () => {
-      if (loop) loop.stop();
-    };
-  }, [isRecording]);
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(micPulse, { toValue: 1.15, duration: 900, useNativeDriver: true }),
+        Animated.timing(micPulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, []);
 
   // When bedtime lock triggers, speak bedtime and stop activities
   useEffect(() => {
@@ -75,70 +72,74 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Voice Interaction with REAL VOICE PLAYBACK (expo-speech)
-  const handleToggleVoice = async () => {
-    if (!isRecording) {
-      // Start child speech capture
-      VoiceService.stopSpeaking();
-      const started = await VoiceService.startRecording();
-      if (!started) {
-        Alert.alert(
-          'Microphone Access',
-          'Please allow microphone permission to talk with your companion.'
-        );
-        return;
-      }
+  // Open AI Voice & Speech Interaction Modal
+  const handleOpenAiVoice = () => {
+    VoiceService.stopSpeaking();
+    setIsVoiceModalVisible(true);
+  };
 
-      setIsRecording(true);
-      setCharState('LISTENING');
-      setSpeechText(
-        lang === 'hi'
-          ? 'मैं ध्यान से सुन रहा हूँ... बोलो!'
-          : lang === 'gu'
-          ? 'હું ધ્યાનથી સાંભળી રહ્યો છું... બોલો!'
-          : "I'm listening carefully to you..."
-      );
+  // Process Real AI conversation query
+  const handleAiConversation = async (userText: string) => {
+    // 1. Set Companion to Thinking State
+    setCharState('THINKING');
+    setIsAiBadgeVisible(false);
+
+    const thinkingMsg =
+      lang === 'hi'
+        ? `सोच रहा हूँ... "${userText}" का प्यारा सा जवाब!`
+        : lang === 'gu'
+        ? `હું વિચારું છું... "${userText}" નો સરસ જવાબ!`
+        : `Thinking of a fun answer to "${userText}"...`;
+
+    setSpeechText(thinkingMsg);
+
+    // 2. Call Backend Real AI Endpoint (Gemini Flash or Dynamic Preschool Model)
+    const sessionId = currentSessionId || `sess-${Date.now()}`;
+    const childId = child.id || 'child-active';
+
+    const response = await ApiClient.sendMessage(
+      sessionId,
+      childId,
+      selectedCharacter,
+      userText,
+      lang,
+      child.nickname || 'friend'
+    );
+
+    let replyText = '';
+    let replyAnimation: CharacterState = 'TALKING';
+
+    if (response.success && response.data?.text) {
+      replyText = response.data.text;
+      replyAnimation = (response.data.animationState as CharacterState) || 'TALKING';
+      setIsAiBadgeVisible(true);
     } else {
-      // Stop speech capture & trigger thinking
-      setIsRecording(false);
-      setCharState('THINKING');
-      setSpeechText(
+      // Local dynamic fallback
+      replyText =
         lang === 'hi'
-          ? 'सोच रहा हूँ... एक प्यारा सा जवाब!'
+          ? `नमस्ते ${child.nickname || 'दोस्त'}! मुझे तुमसे बात करके बहुत मज़ा आया!`
           : lang === 'gu'
-          ? 'હું વિચારું છું... એક સરસ જવાબ!'
-          : 'Thinking of a fun answer...'
-      );
-
-      const audioUri = await VoiceService.stopRecording();
-
-      // Process voice & SPEAK OUT LOUD THROUGH PHONE SPEAKER!
-      setTimeout(async () => {
-        const result = await VoiceService.processVoice(
-          audioUri,
-          selectedCharacter,
-          lang,
-          child.nickname || 'friend'
-        );
-
-        setSpeechText(result.characterReply);
-
-        // Real Voice Playback: speaks aloud through speaker while mouth animates!
-        VoiceService.speakOutLoud(
-          result.characterReply,
-          lang,
-          () => setCharState('TALKING'),
-          () => {
-            setCharState('HAPPY');
-            setTimeout(() => setCharState('IDLE'), 1800);
-          }
-        );
-      }, 1000);
+          ? `નમસ્તે ${child.nickname || 'મિત્ર'}! મને તમારી સાથે વાત કરીને બહુ આનંદ થયો!`
+          : `Hello ${child.nickname || 'friend'}! I love talking and playing with you!`;
+      replyAnimation = 'HAPPY';
     }
+
+    setSpeechText(replyText);
+
+    // 3. REAL VOICE PLAYBACK (expo-speech): speaks aloud through phone speaker!
+    VoiceService.speakOutLoud(
+      replyText,
+      lang,
+      () => setCharState(replyAnimation),
+      () => {
+        setCharState('HAPPY');
+        setTimeout(() => setCharState('IDLE'), 2000);
+      }
+    );
   };
 
   // Quick Action activities with REAL VOICE SPEECH
-  const handleQuickTopic = (topic: 'rhyme' | 'counting' | 'animals' | 'bedtime') => {
+  const handleQuickTopic = async (topic: 'rhyme' | 'counting' | 'animals' | 'bedtime') => {
     VoiceService.stopSpeaking();
 
     if (topic === 'bedtime') {
@@ -150,44 +151,31 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
           : 'Good night little star! Sweet dreams! Zzz...';
       setCharState('SLEEPING');
       setSpeechText(text);
+      setIsAiBadgeVisible(false);
       VoiceService.speakOutLoud(text, lang);
       return;
     }
 
-    let textToSpeak = '';
-    if (topic === 'rhyme') {
-      textToSpeak =
-        lang === 'hi'
-          ? 'तितली उड़ी बस पर चढ़ी, सीट ना मिली तो रोने लगी! तुम बहुत प्यारे हो!'
+    const topicQuery =
+      topic === 'rhyme'
+        ? lang === 'hi'
+          ? 'मुझे एक प्यारी सी कविता सुनाओ'
           : lang === 'gu'
-          ? 'ચકીબેન ચકીબેન મારી સાથે રમવા આવશો કે નહીં? ચાલો સાથે રમીએ!'
-          : 'Twinkle twinkle little star, how I wonder what you are! High five!';
-    } else if (topic === 'counting') {
-      textToSpeak =
-        lang === 'hi'
-          ? 'चलो साथ में गिनते हैं: एक, दो, तीन, चार, पाँच! शाबाश!'
+          ? 'મને બાળગીત સંભળાવો'
+          : 'Sing a fun nursery rhyme for me!'
+        : topic === 'counting'
+        ? lang === 'hi'
+          ? 'चलो 1 से 5 गिनती सीखते हैं'
           : lang === 'gu'
-          ? 'ચાલો સાથે ગણીએ: એક, બે, ત્રણ, ચાર, પાંચ! બહુ સરસ!'
-          : "Let's count together: 1... 2... 3... 4... 5! You are amazing!";
-    } else {
-      textToSpeak =
-        lang === 'hi'
-          ? 'शेर करता है दहाड़! और छोटी सी चिड़िया करती है चीं-चीं!'
-          : lang === 'gu'
-          ? 'સિંહ કરે છે ગર્જના! અને ચકલી કરે છે ચીં-ચીં!'
-          : 'Lions say roar! And little duckies say quack-quack!';
-    }
+          ? 'ચાલો 1 થી 5 ગણીએ'
+          : 'Let us count from 1 to 5 together!'
+        : lang === 'hi'
+        ? 'जानवरों के बारे में कुछ बताओ'
+        : lang === 'gu'
+        ? 'પ્રાણીઓ વિશે કંઈક કહો'
+        : 'Tell me a fun fact about animals!';
 
-    setSpeechText(textToSpeak);
-    VoiceService.speakOutLoud(
-      textToSpeak,
-      lang,
-      () => setCharState('TALKING'),
-      () => {
-        setCharState('HAPPY');
-        setTimeout(() => setCharState('IDLE'), 1600);
-      }
-    );
+    await handleAiConversation(topicQuery);
   };
 
   return (
@@ -238,7 +226,11 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
       </View>
 
       {/* Multilingual Speech Bubble */}
-      <View style={styles.speechCard}>
+      <TouchableOpacity 
+        style={styles.speechCard}
+        onPress={handleOpenAiVoice}
+        activeOpacity={0.9}
+      >
         <View style={styles.stateIndicator}>
           <View
             style={[
@@ -256,10 +248,15 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
             ]}
           />
           <Text style={styles.stateLabel}>{charState}</Text>
-          {isRecording && <Text style={styles.recordingLiveText}>• LISTENING...</Text>}
+          {isAiBadgeVisible && (
+            <View style={styles.aiBadge}>
+              <Text style={styles.aiBadgeText}>✨ Real AI Voice</Text>
+            </View>
+          )}
         </View>
         <Text style={styles.speechText}>"{speechText}"</Text>
-      </View>
+        <Text style={styles.tapToAskHint}>👆 Tap to speak or ask anything</Text>
+      </TouchableOpacity>
 
       {/* Quick Action Activity Chips */}
       <View style={styles.quickActionsRow}>
@@ -298,31 +295,36 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
         <Animated.View
           style={[
             styles.micPulseRing,
-            { transform: [{ scale: micPulse }] },
-            isRecording && styles.micPulseActive,
+            {
+              transform: [{ scale: micPulse }],
+              borderColor: currentChar.primaryColor,
+            },
           ]}
+        />
+        <TouchableOpacity
+          style={[
+            styles.micButton,
+            { backgroundColor: currentChar.primaryColor },
+          ]}
+          onPress={handleOpenAiVoice}
+          activeOpacity={0.85}
         >
-          <TouchableOpacity
-            style={[
-              styles.micButton,
-              { backgroundColor: isRecording ? '#E91E63' : currentChar.primaryColor },
-            ]}
-            activeOpacity={0.85}
-            onPress={handleToggleVoice}
-          >
-            <Text style={styles.micEmoji}>
-              {isRecording ? '⏹️' : '🎤'}
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-        <Text style={styles.micHint}>
-          {isRecording
-            ? 'Tap to Stop & Hear Answer'
-            : `Tap Mic to Talk with ${currentChar.name}`}
-        </Text>
+          <Text style={styles.micIcon}>🎙️</Text>
+          <Text style={styles.micLabel}>Talk to {currentChar.name}</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Bedtime Lock Modal (Triggers when session time expires) */}
+      {/* AI Voice & Speech Interaction Sheet Modal */}
+      <AiVoiceModal
+        visible={isVoiceModalVisible}
+        characterId={selectedCharacter}
+        characterName={currentChar.name}
+        language={lang}
+        onClose={() => setIsVoiceModalVisible(false)}
+        onSubmitText={handleAiConversation}
+      />
+
+      {/* Bedtime Lock Overlay Screen with Math Challenge */}
       <BedtimeLockModal visible={isBedtimeLocked} />
     </View>
   );
@@ -332,40 +334,40 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F1F8E9',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   topBar: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
   endSessionBtn: {
     backgroundColor: '#FFEBEE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#FFCDD2',
   },
   endSessionText: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#D32F2F',
   },
   timerBadge: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#C8E6C9',
+    borderColor: '#81C784',
   },
   timerBadgeWarning: {
-    backgroundColor: '#FFF8E1',
-    borderColor: '#FFB300',
+    backgroundColor: '#FFF3E0',
+    borderColor: '#FFB74D',
   },
   timerText: {
     fontSize: 13,
@@ -373,48 +375,47 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
   },
   settingsBtn: {
-    backgroundColor: '#ECEFF1',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#CFD8DC',
   },
   settingsBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#455A64',
+    color: '#37474F',
   },
   stage: {
-    width: '100%',
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     marginVertical: 4,
-    minHeight: 270,
   },
   speechCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#C8E6C9',
-    shadowColor: '#1B5E20',
+    borderRadius: 22,
+    padding: 16,
+    marginHorizontal: 8,
+    shadowColor: '#2E7D32',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
   },
   stateIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
-    gap: 6,
+    marginBottom: 6,
   },
   stateDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    marginRight: 6,
   },
   stateLabel: {
     fontSize: 11,
@@ -422,37 +423,48 @@ const styles = StyleSheet.create({
     color: '#78909C',
     letterSpacing: 0.5,
   },
-  recordingLiveText: {
-    fontSize: 11,
+  aiBadge: {
+    marginLeft: 10,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  aiBadgeText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#D32F2F',
-    letterSpacing: 0.5,
+    color: '#1976D2',
   },
   speechText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#263238',
-    lineHeight: 21,
+    lineHeight: 22,
+  },
+  tapToAskHint: {
+    fontSize: 11,
+    color: '#90A4AE',
+    marginTop: 6,
     fontStyle: 'italic',
   },
   quickActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginVertical: 4,
+    justifyContent: 'space-around',
+    marginVertical: 10,
+    paddingHorizontal: 4,
   },
   actionChip: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 16,
-    borderWidth: 1.5,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
     borderColor: '#E0E0E0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 1,
   },
   chipText: {
     fontSize: 12,
@@ -462,34 +474,36 @@ const styles = StyleSheet.create({
   micContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 4,
+    marginBottom: 8,
   },
   micPulseRing: {
-    borderRadius: 45,
-    padding: 4,
-  },
-  micPulseActive: {
-    backgroundColor: '#FFCDD2',
+    position: 'absolute',
+    width: 200,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    opacity: 0.4,
   },
   micButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 32,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 6,
+    elevation: 4,
   },
-  micEmoji: {
-    fontSize: 32,
+  micIcon: {
+    fontSize: 22,
+    marginRight: 10,
   },
-  micHint: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#558B2F',
-    marginTop: 6,
+  micLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
