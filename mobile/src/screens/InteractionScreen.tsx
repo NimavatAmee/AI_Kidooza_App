@@ -4,27 +4,35 @@ import { useApp } from '../context/AppContext';
 import { CharacterState, CHARACTERS } from '../types/character';
 import { CharacterViewer } from '../components/CharacterViewer';
 import { VoiceService } from '../services/voiceService';
+import { BedtimeLockModal } from '../components/BedtimeLockModal';
 
 interface InteractionScreenProps {
   onOpenSettings: () => void;
 }
 
 export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSettings }) => {
-  const { selectedCharacter, child, goToScreen } = useApp();
+  const { 
+    selectedCharacter, 
+    child, 
+    goToScreen,
+    sessionSecondsRemaining,
+    isBedtimeLocked,
+  } = useApp();
+
   const currentChar = CHARACTERS[selectedCharacter] || CHARACTERS.dino;
   const lang = child.preferredLanguage || 'en';
 
   const [charState, setCharState] = useState<CharacterState>('IDLE');
   const [speechText, setSpeechText] = useState<string>(
     lang === 'hi'
-      ? `नमस्ते ${child.nickname || 'दोस्त'}! माइक दबाकर मुझसे कुछ भी पूछो!`
+      ? `नमस्ते ${child.nickname || 'दोस्त'}! माइक दबाकर मुझसे बातें करो!`
       : lang === 'gu'
-      ? `નમસ્તે ${child.nickname || 'મિત્ર'}! માઈક દબાવીને મારી સાથે વાત કરો!`
-      : `Hi ${child.nickname || 'friend'}! Press the mic to talk with me!`
+      ? `નમસ્તે ${child.nickname || 'મિત્ર'}! માઈક દબાવીને મારી સાથે વાતો કરો!`
+      : `Hi ${child.nickname || 'friend'}! Tap the mic to talk with me!`
   );
   const [isRecording, setIsRecording] = useState<boolean>(false);
 
-  // Pulse ring animation for mic
+  // Pulse ring animation for mic button
   const micPulse = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -45,15 +53,38 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
     };
   }, [isRecording]);
 
-  // Voice Interaction Trigger (Hold / Tap to Talk)
+  // When bedtime lock triggers, speak bedtime and stop activities
+  useEffect(() => {
+    if (isBedtimeLocked) {
+      setCharState('SLEEPING');
+      VoiceService.stopSpeaking();
+      const bedtimeMsg =
+        lang === 'hi'
+          ? 'आज बहुत मज़ा आया! अब सोने का समय है। शुभ रात्रि!'
+          : lang === 'gu'
+          ? 'આજે બહુ મજા આવી! હવે સૂવાનો સમય છે. આવજો!'
+          : 'Great playing today! Time to sleep and rest our eyes. Good night!';
+      VoiceService.speakOutLoud(bedtimeMsg, lang);
+    }
+  }, [isBedtimeLocked]);
+
+  // Format seconds into MM:SS
+  const formatTime = (totalSeconds: number): string => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // Voice Interaction with REAL VOICE PLAYBACK (expo-speech)
   const handleToggleVoice = async () => {
     if (!isRecording) {
-      // Start Recording
+      // Start child speech capture
+      VoiceService.stopSpeaking();
       const started = await VoiceService.startRecording();
       if (!started) {
         Alert.alert(
-          'Microphone Permission',
-          'Please allow microphone access in settings so your child can speak with the companion.'
+          'Microphone Access',
+          'Please allow microphone permission to talk with your companion.'
         );
         return;
       }
@@ -61,14 +92,14 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
       setIsRecording(true);
       setCharState('LISTENING');
       setSpeechText(
-        lang === 'hi' 
-          ? 'मैं ध्यान से सुन रहा हूँ... बोलो!' 
-          : lang === 'gu' 
-          ? 'હું ધ્યાનથી સાંભળી રહ્યો છું... બોલો!' 
+        lang === 'hi'
+          ? 'मैं ध्यान से सुन रहा हूँ... बोलो!'
+          : lang === 'gu'
+          ? 'હું ધ્યાનથી સાંભળી રહ્યો છું... બોલો!'
           : "I'm listening carefully to you..."
       );
     } else {
-      // Stop Recording & Process Voice
+      // Stop speech capture & trigger thinking
       setIsRecording(false);
       setCharState('THINKING');
       setSpeechText(
@@ -81,7 +112,7 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
 
       const audioUri = await VoiceService.stopRecording();
 
-      // Process through voice pipeline
+      // Process voice & SPEAK OUT LOUD THROUGH PHONE SPEAKER!
       setTimeout(async () => {
         const result = await VoiceService.processVoice(
           audioUri,
@@ -90,91 +121,107 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
           child.nickname || 'friend'
         );
 
-        setCharState(result.animationState);
         setSpeechText(result.characterReply);
 
-        // After talking finishes, bounce happily and return to idle
-        setTimeout(() => {
-          setCharState('HAPPY');
-          setTimeout(() => {
-            setCharState('IDLE');
-          }, 1800);
-        }, result.speechDurationMs);
-      }, 1200);
+        // Real Voice Playback: speaks aloud through speaker while mouth animates!
+        VoiceService.speakOutLoud(
+          result.characterReply,
+          lang,
+          () => setCharState('TALKING'),
+          () => {
+            setCharState('HAPPY');
+            setTimeout(() => setCharState('IDLE'), 1800);
+          }
+        );
+      }, 1000);
     }
   };
 
+  // Quick Action activities with REAL VOICE SPEECH
   const handleQuickTopic = (topic: 'rhyme' | 'counting' | 'animals' | 'bedtime') => {
+    VoiceService.stopSpeaking();
+
     if (topic === 'bedtime') {
-      setCharState('SLEEPING');
-      setSpeechText(
+      const text =
         lang === 'hi'
           ? 'शुभ रात्रि प्यारे दोस्त! मीठे-मीठे सपने देखो! Zzz...'
           : lang === 'gu'
           ? 'શુભ રાત્રી વ્હાલા મિત્ર! મીઠા સપના જોજો! Zzz...'
-          : 'Good night little star! Sweet dreams! Zzz...'
-      );
+          : 'Good night little star! Sweet dreams! Zzz...';
+      setCharState('SLEEPING');
+      setSpeechText(text);
+      VoiceService.speakOutLoud(text, lang);
       return;
     }
 
-    setCharState('TALKING');
+    let textToSpeak = '';
     if (topic === 'rhyme') {
-      setSpeechText(
+      textToSpeak =
         lang === 'hi'
-          ? 'तितली उड़ी बस पर चढ़ी, सीट ना मिली तो रोने लगी!'
+          ? 'तितली उड़ी बस पर चढ़ी, सीट ना मिली तो रोने लगी! तुम बहुत प्यारे हो!'
           : lang === 'gu'
-          ? 'ચકીબેન ચકીબેન મારી સાથે રમવા આવશો કે નહીં?'
-          : 'Twinkle twinkle little star, how I wonder what you are!'
-      );
+          ? 'ચકીબેન ચકીબેન મારી સાથે રમવા આવશો કે નહીં? ચાલો સાથે રમીએ!'
+          : 'Twinkle twinkle little star, how I wonder what you are! High five!';
     } else if (topic === 'counting') {
-      setSpeechText(
+      textToSpeak =
         lang === 'hi'
           ? 'चलो साथ में गिनते हैं: एक, दो, तीन, चार, पाँच! शाबाश!'
           : lang === 'gu'
           ? 'ચાલો સાથે ગણીએ: એક, બે, ત્રણ, ચાર, પાંચ! બહુ સરસ!'
-          : "Let's count together: 1... 2... 3... 4... 5! High five!"
-      );
+          : "Let's count together: 1... 2... 3... 4... 5! You are amazing!";
     } else {
-      setSpeechText(
+      textToSpeak =
         lang === 'hi'
-          ? 'शेर करता है: दहाड़! और चिड़िया करती है: चीं-चीं!'
+          ? 'शेर करता है दहाड़! और छोटी सी चिड़िया करती है चीं-चीं!'
           : lang === 'gu'
-          ? 'સિંહ કરે છે: ગર્જના! અને ચકલી કરે છે: ચીં-ચીં!'
-          : 'Lions say roar! And little duckies say quack-quack!'
-      );
+          ? 'સિંહ કરે છે ગર્જના! અને ચકલી કરે છે ચીં-ચીં!'
+          : 'Lions say roar! And little duckies say quack-quack!';
     }
 
-    setTimeout(() => {
-      setCharState('HAPPY');
-      setTimeout(() => {
-        setCharState('IDLE');
-      }, 1600);
-    }, 3800);
+    setSpeechText(textToSpeak);
+    VoiceService.speakOutLoud(
+      textToSpeak,
+      lang,
+      () => setCharState('TALKING'),
+      () => {
+        setCharState('HAPPY');
+        setTimeout(() => setCharState('IDLE'), 1600);
+      }
+    );
   };
 
   return (
     <View style={styles.container}>
-      {/* Top Header Bar */}
+      {/* Top Bar with Session Countdown */}
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.endSessionBtn}
-          onPress={() => goToScreen('character-select')}
+          onPress={() => {
+            VoiceService.stopSpeaking();
+            goToScreen('character-select');
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.endSessionText}>✕ End</Text>
         </TouchableOpacity>
 
-        {/* Child & Companion Tag */}
-        <View style={styles.childBadge}>
-          <Text style={styles.childBadgeText}>
-            {child.nickname || 'Child'} & {currentChar.name} {currentChar.badgeEmoji}
+        {/* Live Session Timer */}
+        <View style={[
+          styles.timerBadge, 
+          sessionSecondsRemaining < 120 && styles.timerBadgeWarning
+        ]}>
+          <Text style={styles.timerText}>
+            ⏱️ {formatTime(sessionSecondsRemaining)}
           </Text>
         </View>
 
         {/* Parent Settings Button */}
         <TouchableOpacity
           style={styles.settingsBtn}
-          onPress={onOpenSettings}
+          onPress={() => {
+            VoiceService.stopSpeaking();
+            onOpenSettings();
+          }}
           activeOpacity={0.8}
         >
           <Text style={styles.settingsBtnText}>⚙️ Parent</Text>
@@ -209,7 +256,7 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
             ]}
           />
           <Text style={styles.stateLabel}>{charState}</Text>
-          {isRecording && <Text style={styles.recordingLiveText}>• RECORDING LIVE</Text>}
+          {isRecording && <Text style={styles.recordingLiveText}>• LISTENING...</Text>}
         </View>
         <Text style={styles.speechText}>"{speechText}"</Text>
       </View>
@@ -270,10 +317,13 @@ export const InteractionScreen: React.FC<InteractionScreenProps> = ({ onOpenSett
         </Animated.View>
         <Text style={styles.micHint}>
           {isRecording
-            ? 'Tap to Stop & Send Speech'
+            ? 'Tap to Stop & Hear Answer'
             : `Tap Mic to Talk with ${currentChar.name}`}
         </Text>
       </View>
+
+      {/* Bedtime Lock Modal (Triggers when session time expires) */}
+      <BedtimeLockModal visible={isBedtimeLocked} />
     </View>
   );
 };
@@ -305,15 +355,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#D32F2F',
   },
-  childBadge: {
+  timerBadge: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1.5,
     borderColor: '#C8E6C9',
   },
-  childBadgeText: {
+  timerBadgeWarning: {
+    backgroundColor: '#FFF8E1',
+    borderColor: '#FFB300',
+  },
+  timerText: {
     fontSize: 13,
     fontWeight: '800',
     color: '#2E7D32',
